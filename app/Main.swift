@@ -7,32 +7,15 @@
 
 import SwiftUI
 
-struct ContentView: View {
-    @State private var currentStep = 0
-    @State private var intention = ""
-    @State private var selectedOptions: Set<GoalOption> = []
+struct MainView: View {
+    @StateObject private var dataStore = DataStore()
     
     var body: some View {
-        ZStack {
-            Color(.systemBackground)
-                .ignoresSafeArea()
-            
-            VStack {
-                switch currentStep {
-                case 0:
-                    IntentionView(intention: $intention, currentStep: $currentStep)
-                case 1:
-                    OptionsView(selectedOptions: $selectedOptions, currentStep: $currentStep)
-                case 2:
-                    SummaryView(intention: intention, selectedOptions: selectedOptions, currentStep: $currentStep)
-                default:
-                    EmptyView()
-                }
-            }
-        }
+        IntentionsListView(dataStore: dataStore)
+            .environmentObject(dataStore)
     }
 }
 
 #Preview {
-    ContentView()
+    MainView()
 }
