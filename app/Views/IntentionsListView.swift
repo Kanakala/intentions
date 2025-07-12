@@ -328,41 +328,45 @@ struct AddIntentionView: View {
     ]
     
     var imagePickerRow: some View {
-        HStack(spacing: 16) {
-            ForEach(availableImages, id: \.self) { imageName in
-                ZStack {
-                    if let uiImage = UIImage(named: imageName) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 80, height: 60)
-                            .clipped()
-                            .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(selectedImageName == imageName ? Color.blue : Color.clear, lineWidth: 3)
-                            )
-                    } else {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 80, height: 60)
-                            .overlay(
-                                Text("?")
-                                    .foregroundColor(.gray)
-                            )
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 16) {
+                ForEach(availableImages, id: \.self) { imageName in
+                    ZStack {
+                        if let uiImage = UIImage(named: imageName) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 80, height: 60)
+                                .clipped()
+                                .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(selectedImageName == imageName ? Color.blue : Color.clear, lineWidth: 3)
+                                )
+                        } else {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(width: 80, height: 60)
+                                .overlay(
+                                    Text("?")
+                                        .foregroundColor(.gray)
+                                )
+                        }
+                        if selectedImageName == imageName {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.blue)
+                                .offset(x: 28, y: -22)
+                        }
                     }
-                    if selectedImageName == imageName {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.blue)
-                            .offset(x: 28, y: -22)
+                    .onTapGesture {
+                        print("Selected image: \(imageName)")
+                        selectedImageName = imageName
                     }
-                }
-                .onTapGesture {
-                    selectedImageName = imageName
                 }
             }
+            .padding(.horizontal, 16)
         }
-        .padding(.vertical, 4)
+        .frame(height: 80)
     }
     
     var body: some View {
@@ -384,9 +388,7 @@ struct AddIntentionView: View {
                     }
                 }
                 Section(header: Text("Card Image")) {
-                    ScrollView {
-                        imagePickerRow
-                    }
+                    imagePickerRow
                 }
             }
             .navigationTitle("Add Intention")
@@ -421,41 +423,57 @@ struct EditIntentionView: View {
     ]
     
     var imagePickerRow: some View {
-        HStack(spacing: 16) {
-            ForEach(availableImages, id: \.self) { imageName in
-                ZStack {
-                    if let uiImage = UIImage(named: imageName) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 80, height: 60)
-                            .clipped()
-                            .cornerRadius(10)
-                            .overlay(
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(availableImages, id: \.self) { imageName in
+                        ZStack {
+                            if let uiImage = UIImage(named: imageName) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 80, height: 60)
+                                    .clipped()
+                                    .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(selectedImageName == imageName ? Color.blue : Color.clear, lineWidth: 3)
+                                    )
+                            } else {
                                 RoundedRectangle(cornerRadius: 10)
-                                    .stroke(selectedImageName == imageName ? Color.blue : Color.clear, lineWidth: 3)
-                            )
-                    } else {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 80, height: 60)
-                            .overlay(
-                                Text("?")
-                                    .foregroundColor(.gray)
-                            )
-                    }
-                    if selectedImageName == imageName {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.blue)
-                            .offset(x: 28, y: -22)
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 80, height: 60)
+                                    .overlay(
+                                        Text("?")
+                                            .foregroundColor(.gray)
+                                    )
+                            }
+                            if selectedImageName == imageName {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.blue)
+                                    .offset(x: 28, y: -22)
+                            }
+                        }
+                        .id(imageName) // Add ID for scrolling
+                        .onTapGesture {
+                            print("Edit mode - Selected image: \(imageName)")
+                            selectedImageName = imageName
+                        }
                     }
                 }
-                .onTapGesture {
-                    selectedImageName = imageName
+                .padding(.horizontal, 16)
+            }
+            .frame(height: 80)
+            .onAppear {
+                // Scroll to selected image when view appears
+                if let selectedImage = selectedImageName {
+                    print("Edit mode - Scrolling to selected image: \(selectedImage)")
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        proxy.scrollTo(selectedImage, anchor: .center)
+                    }
                 }
             }
         }
-        .padding(.vertical, 4)
     }
     
     init(goal: Goal, dataStore: DataStore) {
@@ -485,9 +503,7 @@ struct EditIntentionView: View {
                     }
                 }
                 Section(header: Text("Card Image")) {
-                    ScrollView {
-                        imagePickerRow
-                    }
+                    imagePickerRow
                 }
             }
             .navigationTitle("Edit Intention")
