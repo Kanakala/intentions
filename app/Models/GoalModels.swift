@@ -172,3 +172,194 @@ enum GoalOption: String, CaseIterable, Identifiable, Codable {
         }
     }
 } 
+
+// MARK: - Intention Draft Models (for AI-assisted creation)
+struct IntentionDraft {
+    var title: String = ""
+    var reminderTime: Date? = nil
+    var repeatPattern: RepeatPattern = .none
+    var durationInMinutes: Int? = nil
+    var checkInPrompt: String? = nil
+    var selectedOptions: Set<GoalOption> = [.dailyReflection]
+    var imageName: String? = nil
+}
+
+enum RepeatPattern: String, CaseIterable, Identifiable {
+    case none = "None"
+    case daily = "Daily"
+    case weekly = "Weekly"
+    case monthly = "Monthly"
+    
+    var id: String { self.rawValue }
+    
+    var description: String {
+        switch self {
+        case .none: return "No repeat"
+        case .daily: return "Every day"
+        case .weekly: return "Every week"
+        case .monthly: return "Every month"
+        }
+    }
+}
+
+struct ChatMessage: Identifiable {
+    let id = UUID()
+    let content: String
+    let isUser: Bool
+    let timestamp: Date = Date()
+    
+    static func user(_ content: String) -> ChatMessage {
+        ChatMessage(content: content, isUser: true)
+    }
+    
+    static func bot(_ content: String) -> ChatMessage {
+        ChatMessage(content: content, isUser: false)
+    }
+}
+
+struct IntentUpdates {
+    var title: String?
+    var reminderTime: Date?
+    var repeatPattern: RepeatPattern?
+    var durationInMinutes: Int?
+    var checkInPrompt: String?
+    var selectedOptions: Set<GoalOption>?
+    
+    var summary: String {
+        var parts: [String] = []
+        if let title = title { parts.append("title: \(title)") }
+        if let _ = reminderTime { parts.append("reminder time") }
+        if let pattern = repeatPattern { parts.append("frequency: \(pattern.description)") }
+        if let duration = durationInMinutes { parts.append("duration: \(duration) minutes") }
+        if let options = selectedOptions { parts.append("\(options.count) tracking options") }
+        return parts.joined(separator: ", ")
+    }
+} 
+
+// MARK: - Chat Intent Parser
+struct ChatIntentParser {
+    static func parse(_ input: String) -> IntentUpdates {
+        let lowercased = input.lowercased()
+        var updates = IntentUpdates()
+        
+        // Parse title/intention
+        if let titleMatch = extractTitle(from: lowercased) {
+            updates.title = titleMatch
+        }
+        
+        // Parse time
+        if let timeMatch = extractTime(from: lowercased) {
+            updates.reminderTime = timeMatch
+        }
+        
+        // Parse frequency
+        if let frequencyMatch = extractFrequency(from: lowercased) {
+            updates.repeatPattern = frequencyMatch
+        }
+        
+        // Parse duration
+        if let durationMatch = extractDuration(from: lowercased) {
+            updates.durationInMinutes = durationMatch
+        }
+        
+        // Parse tracking options
+        if let optionsMatch = extractTrackingOptions(from: lowercased) {
+            updates.selectedOptions = optionsMatch
+        }
+        
+        return updates
+    }
+    
+    private static func extractTitle(from input: String) -> String? {
+        // Look for patterns like "I want to...", "remind me to...", etc.
+        let patterns = [
+            "i want to (.+?)(?:every|daily|at|$)",
+            "remind me to (.+?)(?:every|daily|at|$)",
+            "help me (.+?)(?:every|daily|at|$)",
+            "track (.+?)(?:every|daily|at|$)"
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: input, range: NSRange(input.startIndex..., in: input)),
+               let range = Range(match.range(at: 1), in: input) {
+                return String(input[range]).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return nil
+    }
+    
+    private static func extractTime(from input: String) -> Date? {
+        let timePatterns = [
+            "(\\d{1,2})\\s*am",
+            "(\\d{1,2})\\s*pm",
+            "at (\\d{1,2})",
+            "(\\d{1,2}):(\\d{2})"
+        ]
+        
+        for pattern in timePatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: input, range: NSRange(input.startIndex..., in: input)) {
+                
+                if let hourRange = Range(match.range(at: 1), in: input),
+                   let hour = Int(String(input[hourRange])) {
+                    
+                    var adjustedHour = hour
+                    if input.contains("pm") && hour != 12 {
+                        adjustedHour += 12
+                    } else if input.contains("am") && hour == 12 {
+                        adjustedHour = 0
+                    }
+                    
+                    let calendar = Calendar.current
+                    let components = DateComponents(hour: adjustedHour, minute: 0)
+                    return calendar.date(from: components)
+                }
+            }
+        }
+        return nil
+    }
+    
+    private static func extractFrequency(from input: String) -> RepeatPattern? {
+        if input.contains("daily") || input.contains("every day") {
+            return .daily
+        } else if input.contains("weekly") || input.contains("every week") {
+            return .weekly
+        } else if input.contains("monthly") || input.contains("every month") {
+            return .monthly
+        }
+        return nil
+    }
+    
+    private static func extractDuration(from input: String) -> Int? {
+        let durationPattern = "(\\d+)\\s*minutes?"
+        if let regex = try? NSRegularExpression(pattern: durationPattern),
+           let match = regex.firstMatch(in: input, range: NSRange(input.startIndex..., in: input)),
+           let range = Range(match.range(at: 1), in: input) {
+            return Int(String(input[range]))
+        }
+        return nil
+    }
+    
+    private static func extractTrackingOptions(from input: String) -> Set<GoalOption>? {
+        var options: Set<GoalOption> = []
+        
+        if input.contains("journal") || input.contains("write") {
+            options.insert(.journalEntry)
+        }
+        if input.contains("celebrate") || input.contains("wins") {
+            options.insert(.celebrateWins)
+        }
+        if input.contains("reminder") || input.contains("morning") {
+            options.insert(.morningReminder)
+        }
+        if input.contains("weekly check") || input.contains("progress") {
+            options.insert(.weeklyCheck)
+        }
+        
+        // Always include daily reflection as default
+        options.insert(.dailyReflection)
+        
+        return options.isEmpty ? nil : options
+    }
+} 

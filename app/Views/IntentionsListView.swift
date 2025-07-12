@@ -36,7 +36,7 @@ struct IntentionsListView: View {
                 }
                 .padding()
                 .sheet(isPresented: $showingAddIntention) {
-                    AddIntentionView(dataStore: dataStore)
+                    CreateIntentionScreen(dataStore: dataStore)
                 }
             }
             .navigationTitle("Your Intentions")
