@@ -50,27 +50,37 @@ struct CreateIntentionScreen: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
+                        print("🟢 SAVE BUTTON TAPPED in CreateIntentionScreen")
                         let goal = draftViewModel.createGoal()
                         dataStore.saveGoal(goal)
+                        print("🟢 SAVE COMPLETED - dismissing")
                         dismiss()
                     }
                     .disabled(draftViewModel.draft.title.isEmpty)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        print("🟢 CANCEL BUTTON TAPPED in CreateIntentionScreen")
                         dismiss()
                     }
                 }
             }
         }
-        .onTapGesture {
-            // Dismiss chat when tapping outside
-            if isChatVisible {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    isChatVisible = false
+        // Remove the problematic global onTapGesture
+        .background(
+            // Better chat dismissal - only on background areas
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isChatVisible {
+                        print("🔍 DISMISSING CHAT from background tap")
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isChatVisible = false
+                        }
+                    }
                 }
-            }
-        }
+                .allowsHitTesting(isChatVisible) // Only active when chat is visible
+        )
     }
     
     private var headerSection: some View {

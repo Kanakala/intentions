@@ -478,28 +478,38 @@ struct EditIntentionView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
+                        print("🟢 SAVE BUTTON TAPPED in EditIntentionView")
                         // Create updated goal using the draft
                         let updatedGoal = draftViewModel.createGoal(from: goal)
                         dataStore.updateGoal(updatedGoal)
+                        print("🟢 SAVE COMPLETED - dismissing")
                         dismiss()
                     }
                     .disabled(draftViewModel.draft.title.isEmpty)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        print("🟢 CANCEL BUTTON TAPPED in EditIntentionView")
                         dismiss()
                     }
                 }
             }
         }
-        .onTapGesture {
-            // Dismiss chat when tapping outside
-            if isChatVisible {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    isChatVisible = false
+        // Remove the problematic global onTapGesture
+        .background(
+            // Better chat dismissal - only on background areas
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isChatVisible {
+                        print("🔍 DISMISSING CHAT from background tap")
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isChatVisible = false
+                        }
+                    }
                 }
-            }
-        }
+                .allowsHitTesting(isChatVisible) // Only active when chat is visible
+        )
     }
     
     private var headerSection: some View {
@@ -553,14 +563,19 @@ struct ReminderSettingsView: View {
             .toolbar(content: {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
+                        print("🟢 SAVE BUTTON TAPPED in ReminderSettingsView")
                         var updatedGoal = goal
                         updatedGoal.reminderTime = isReminderEnabled ? reminderTime : nil
                         dataStore.updateGoal(updatedGoal)
+                        print("🟢 SAVE COMPLETED - dismissing")
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        print("🟢 CANCEL BUTTON TAPPED in ReminderSettingsView")
+                        dismiss()
+                    }
                 }
             })
         }
