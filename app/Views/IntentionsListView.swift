@@ -4,20 +4,29 @@ struct IntentionsListView: View {
     @ObservedObject var dataStore: DataStore
     @State private var showingAddIntention = false
     @State private var selectedGoal: Goal?
+    @Environment(\.editMode) private var editMode
     
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 List {
-                    ForEach(dataStore.goals) { goal in
-                        IntentionCardView(goal: goal, dataStore: dataStore) {
-                            selectedGoal = goal
-                        }
+                    ForEach(dataStore.sortedGoals) { goal in
+                        let isInEditMode = editMode?.wrappedValue.isEditing == true
+                        IntentionCardView(
+                            goal: goal, 
+                            dataStore: dataStore,
+                            isEditMode: isInEditMode,
+                            onTap: {
+                                selectedGoal = goal
+                            }
+                        )
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                     }
-                    .onMove(perform: dataStore.reorderGoals)
+                    .onMove { source, destination in
+                        dataStore.reorderGoals(from: source, to: destination)
+                    }
                 }
                 .listStyle(PlainListStyle())
                 
@@ -44,6 +53,9 @@ struct IntentionsListView: View {
             .toolbar {
                 EditButton()
             }
+            .onChange(of: editMode?.wrappedValue) { oldValue, newValue in
+                // Edit mode changed
+            }
             .navigationDestination(isPresented: Binding(
                 get: { selectedGoal != nil },
                 set: { newValue in
@@ -59,16 +71,14 @@ struct IntentionsListView: View {
                 }
             }
         }
-        .onAppear {
-            // View appeared
-        }
     }
 }
 
 struct IntentionCardView: View {
     let goal: Goal
     @ObservedObject var dataStore: DataStore
-    var onTap: () -> Void
+    let isEditMode: Bool
+    let onTap: () -> Void
     
     // Menu action states
     @State private var showingEditSheet = false
@@ -246,8 +256,12 @@ struct IntentionCardView: View {
         .background(Color(.systemBackground))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
+        .contentShape(Rectangle())
         .onTapGesture {
-            onTap()
+            // Only handle tap when not in edit mode to avoid interfering with drag
+            if !isEditMode {
+                onTap()
+            }
         }
         .onAppear {
             // Card appeared
@@ -359,7 +373,6 @@ struct AddIntentionView: View {
                         }
                     }
                     .onTapGesture {
-                        print("Selected image: \(imageName)")
                         selectedImageName = imageName
                     }
                 }
@@ -478,18 +491,15 @@ struct EditIntentionView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        print("🟢 SAVE BUTTON TAPPED in EditIntentionView")
                         // Create updated goal using the draft
                         let updatedGoal = draftViewModel.createGoal(from: goal)
                         dataStore.updateGoal(updatedGoal)
-                        print("🟢 SAVE COMPLETED - dismissing")
                         dismiss()
                     }
                     .disabled(draftViewModel.draft.title.isEmpty)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        print("🟢 CANCEL BUTTON TAPPED in EditIntentionView")
                         dismiss()
                     }
                 }
@@ -502,7 +512,6 @@ struct EditIntentionView: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     if isChatVisible {
-                        print("🔍 DISMISSING CHAT from background tap")
                         withAnimation(.easeInOut(duration: 0.3)) {
                             isChatVisible = false
                         }
@@ -563,17 +572,14 @@ struct ReminderSettingsView: View {
             .toolbar(content: {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        print("🟢 SAVE BUTTON TAPPED in ReminderSettingsView")
                         var updatedGoal = goal
                         updatedGoal.reminderTime = isReminderEnabled ? reminderTime : nil
                         dataStore.updateGoal(updatedGoal)
-                        print("🟢 SAVE COMPLETED - dismissing")
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        print("🟢 CANCEL BUTTON TAPPED in ReminderSettingsView")
                         dismiss()
                     }
                 }

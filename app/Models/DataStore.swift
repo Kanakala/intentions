@@ -63,17 +63,25 @@ class DataStore: ObservableObject {
     func reorderGoals(from source: IndexSet, to destination: Int) {
         guard !source.isEmpty else { return }
         
-        // Use SwiftUI's built-in move method
-        goals.move(fromOffsets: source, toOffset: destination)
+        // Work with sortedGoals to match the UI order
+        var sortedGoalsArray = sortedGoals
+        sortedGoalsArray.move(fromOffsets: source, toOffset: destination)
         
         // Update order values to match the new positions
-        for (index, goal) in goals.enumerated() {
+        for (index, goal) in sortedGoalsArray.enumerated() {
             var updatedGoal = goal
             updatedGoal.order = index
-            goals[index] = updatedGoal
+            sortedGoalsArray[index] = updatedGoal
         }
         
-        saveData()
+        // Replace the entire goals array with the reordered one
+        goals = sortedGoalsArray
+        
+        // Force immediate UI update
+        DispatchQueue.main.async {
+            self.objectWillChange.send()
+            self.saveData()
+        }
     }
     
     var sortedGoals: [Goal] {
