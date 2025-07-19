@@ -10,7 +10,7 @@ struct IntentionsListView: View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 List {
-                    ForEach(dataStore.sortedGoals) { goal in
+                    ForEach(dataStore.goals) { goal in
                         let isInEditMode = editMode?.wrappedValue.isEditing == true
                         IntentionCardView(
                             goal: goal, 
@@ -53,9 +53,6 @@ struct IntentionsListView: View {
             .toolbar {
                 EditButton()
             }
-            .onChange(of: editMode?.wrappedValue) { oldValue, newValue in
-                // Edit mode changed
-            }
             .navigationDestination(isPresented: Binding(
                 get: { selectedGoal != nil },
                 set: { newValue in
@@ -83,12 +80,10 @@ struct IntentionCardView: View {
     // Menu action states
     @State private var showingEditSheet = false
     @State private var showingReminderSheet = false
-    @State private var showingCustomizeSheet = false
     @State private var showingInsightsSheet = false
     @State private var showingDeleteAlert = false
     @State private var showingArchiveAlert = false
     @State private var showingDuplicateAlert = false
-    @State private var showingExportSheet = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -111,12 +106,6 @@ struct IntentionCardView: View {
                         showingReminderSheet = true 
                     }) {
                         Label("Add/Edit Reminder", systemImage: "bell")
-                    }
-                    
-                    Button(action: { 
-                        showingCustomizeSheet = true 
-                    }) {
-                        Label("Customize Appearance", systemImage: "paintbrush")
                     }
                     
                     Divider()
@@ -148,12 +137,6 @@ struct IntentionCardView: View {
                     }) {
                         Label("Delete Intention", systemImage: "trash")
                             .foregroundColor(.red)
-                    }
-                    
-                    Button(action: { 
-                        showingExportSheet = true 
-                    }) {
-                        Label("Export Reflections", systemImage: "square.and.arrow.up")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -201,10 +184,10 @@ struct IntentionCardView: View {
             HStack(spacing: 12) {
                 ProgressView(value: progress)
                     .frame(width: 120)
-                if streak > 0 {
+                if goal.streakCount > 0 {
                     HStack(spacing: 4) {
                         Text("🔥")
-                        Text("\(streak)-day streak!")
+                        Text("\(goal.streakCount)-day streak!")
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
@@ -263,9 +246,6 @@ struct IntentionCardView: View {
                 onTap()
             }
         }
-        .onAppear {
-            // Card appeared
-        }
         // Add sheets and alerts
         .sheet(isPresented: $showingEditSheet) {
             EditIntentionView(goal: goal, dataStore: dataStore)
@@ -273,14 +253,8 @@ struct IntentionCardView: View {
         .sheet(isPresented: $showingReminderSheet) {
             ReminderSettingsView(goal: goal, dataStore: dataStore)
         }
-        .sheet(isPresented: $showingCustomizeSheet) {
-            CustomizeAppearanceView(goal: goal, dataStore: dataStore)
-        }
         .sheet(isPresented: $showingInsightsSheet) {
             InsightsView(goal: goal, dataStore: dataStore)
-        }
-        .sheet(isPresented: $showingExportSheet) {
-            ExportReflectionsView(goal: goal, dataStore: dataStore)
         }
         .alert("Delete Intention", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
@@ -318,107 +292,10 @@ struct IntentionCardView: View {
         }
         return false
     }
-    var streak: Int {
-        goal.streakCount
-    }
     var progress: Double {
-        // Example: 3 of 5 days this week
         let weekStart = Calendar.current.date(from: Calendar.current.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())) ?? Date()
         let weekReflections = dataStore.getReflectionsForGoal(goal.id).filter { $0.date >= weekStart }
         return Double(weekReflections.count) / 5.0
-    }
-}
-
-struct AddIntentionView: View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var dataStore: DataStore
-    @State private var intention = ""
-    @State private var selectedOptions: Set<GoalOption> = [.dailyReflection]
-    @State private var selectedImageName: String? = nil
-    
-    let availableImages = [
-        "run1.png", "run2.png", "run3.png", "read.png", "meditation.png",
-        "image1.jpeg", "image2.jpeg", "image3.jpeg", "image4.jpeg"
-    ]
-    
-    var imagePickerRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                ForEach(availableImages, id: \.self) { imageName in
-                    ZStack {
-                        if let uiImage = UIImage(named: imageName) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 80, height: 60)
-                                .clipped()
-                                .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(selectedImageName == imageName ? Color.blue : Color.clear, lineWidth: 3)
-                                )
-                        } else {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(width: 80, height: 60)
-                                .overlay(
-                                    Text("?")
-                                        .foregroundColor(.gray)
-                                )
-                        }
-                        if selectedImageName == imageName {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.blue)
-                                .offset(x: 28, y: -22)
-                        }
-                    }
-                    .onTapGesture {
-                        selectedImageName = imageName
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .frame(height: 80)
-    }
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Intention")) {
-                    TextField("e.g. Meditate daily", text: $intention)
-                }
-                Section(header: Text("Support Options")) {
-                    ForEach(GoalOption.allCases) { option in
-                        Toggle(isOn: Binding(
-                            get: { selectedOptions.contains(option) },
-                            set: { isOn in
-                                if isOn { selectedOptions.insert(option) } else { selectedOptions.remove(option) }
-                            }
-                        )) {
-                            Text(option.emoji + " " + option.description)
-                        }
-                    }
-                }
-                Section(header: Text("Card Image")) {
-                    imagePickerRow
-                }
-            }
-            .navigationTitle("Add Intention")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        let goal = Goal(intention: intention, selectedOptions: selectedOptions, imageName: selectedImageName, order: dataStore.goals.count)
-                        dataStore.saveGoal(goal)
-                        dismiss()
-                    }
-                    .disabled(intention.isEmpty)
-                }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
     }
 }
 
@@ -588,50 +465,6 @@ struct ReminderSettingsView: View {
     }
 }
 
-struct CustomizeAppearanceView: View {
-    @Environment(\.dismiss) private var dismiss
-    let goal: Goal
-    @ObservedObject var dataStore: DataStore
-    @State private var selectedEmoji: String
-    @State private var selectedColor: Color
-    
-    init(goal: Goal, dataStore: DataStore) {
-        self.goal = goal
-        self.dataStore = dataStore
-        _selectedEmoji = State(initialValue: goal.selectedOptions.first?.emoji ?? "🎯")
-        _selectedColor = State(initialValue: .blue)
-    }
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Icon")) {
-                    TextField("Emoji", text: $selectedEmoji)
-                        .font(.title)
-                }
-                Section(header: Text("Color Theme")) {
-                    ColorPicker("Card Color", selection: $selectedColor)
-                }
-            }
-            .navigationTitle("Customize Appearance")
-            .toolbar(content: {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        let updatedGoal = goal
-                        // Update appearance settings if needed
-                        // For now, just save the existing goal
-                        dataStore.updateGoal(updatedGoal)
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            })
-        }
-    }
-}
-
 struct InsightsView: View {
     @Environment(\.dismiss) private var dismiss
     let goal: Goal
@@ -647,11 +480,11 @@ struct InsightsView: View {
                         Text("\(Int(progress * 100))%")
                             .foregroundColor(.secondary)
                     }
-                    if streak > 0 {
+                    if goal.streakCount > 0 {
                         HStack {
                             Text("Current Streak")
                             Spacer()
-                            Text("\(streak) days")
+                            Text("\(goal.streakCount) days")
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -679,44 +512,5 @@ struct InsightsView: View {
         let weekStart = Calendar.current.date(from: Calendar.current.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())) ?? Date()
         let weekReflections = dataStore.getReflectionsForGoal(goal.id).filter { $0.date >= weekStart }
         return Double(weekReflections.count) / 5.0
-    }
-    
-    private var streak: Int {
-        goal.streakCount
-    }
-}
-
-struct ExportReflectionsView: View {
-    @Environment(\.dismiss) private var dismiss
-    let goal: Goal
-    @ObservedObject var dataStore: DataStore
-    @State private var selectedFormat = "CSV"
-    let formats = ["CSV", "PDF", "Markdown"]
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Export Format")) {
-                    Picker("Format", selection: $selectedFormat) {
-                        ForEach(formats, id: \.self) { format in
-                            Text(format)
-                        }
-                    }
-                }
-                
-                Section {
-                    Button("Export") {
-                        // TODO: Implement export functionality
-                        dismiss()
-                    }
-                }
-            }
-            .navigationTitle("Export Reflections")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
     }
 } 

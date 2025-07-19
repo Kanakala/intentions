@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 
 class DataStore: ObservableObject {
     @Published var goals: [Goal] = []
@@ -7,6 +6,7 @@ class DataStore: ObservableObject {
     
     private let goalsKey = "saved_goals"
     private let reflectionsKey = "saved_reflections"
+    private var reorderWorkItem: DispatchWorkItem?
     
     init() {
         loadData()
@@ -63,25 +63,30 @@ class DataStore: ObservableObject {
     func reorderGoals(from source: IndexSet, to destination: Int) {
         guard !source.isEmpty else { return }
         
-        // Work with sortedGoals to match the UI order
-        var sortedGoalsArray = sortedGoals
-        sortedGoalsArray.move(fromOffsets: source, toOffset: destination)
+        // Cancel any pending reorder operations
+        reorderWorkItem?.cancel()
         
-        // Update order values to match the new positions
-        for (index, goal) in sortedGoalsArray.enumerated() {
-            var updatedGoal = goal
-            updatedGoal.order = index
-            sortedGoalsArray[index] = updatedGoal
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            
+            // Simple direct reorder of the goals array
+            self.goals.move(fromOffsets: source, toOffset: destination)
+            
+            // Update order values to match new positions
+            for (index, goal) in self.goals.enumerated() {
+                var updatedGoal = goal
+                updatedGoal.order = index
+                self.goals[index] = updatedGoal
+            }
+            
+            DispatchQueue.main.async {
+                self.objectWillChange.send()
+                self.saveData()
+            }
         }
         
-        // Replace the entire goals array with the reordered one
-        goals = sortedGoalsArray
-        
-        // Force immediate UI update
-        DispatchQueue.main.async {
-            self.objectWillChange.send()
-            self.saveData()
-        }
+        reorderWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
     }
     
     var sortedGoals: [Goal] {
@@ -119,7 +124,7 @@ class DataStore: ObservableObject {
                 }
             }
             
-            // Sort goals by their order property
+            // Sort goals by their order property to maintain display order
             goals.sort { $0.order < $1.order }
             
             // Save updated goals if we made changes
