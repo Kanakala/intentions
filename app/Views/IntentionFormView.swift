@@ -25,9 +25,6 @@ struct IntentionFormView: View {
             // Image Selection Section
             imageSelectionSection
         }
-        .onAppear {
-            print("📋 Form appeared with: \(draftViewModel.draft.selectedOptions.map { $0.rawValue })")
-        }
     }
     
     private var titleSection: some View {
@@ -141,9 +138,7 @@ struct IntentionFormView: View {
                         option: option,
                         draftViewModel: draftViewModel
                     ) {
-                        print("🎯 Form: Tapped \(option.rawValue)")
                         draftViewModel.toggleTrackingOption(option)
-                        print("🎯 Form: Completed \(option.rawValue)")
                     }
                 }
             }
@@ -173,11 +168,7 @@ struct IntentionFormView: View {
                             imageName: imageName,
                             draftViewModel: draftViewModel
                         ) {
-                            print("🖼️ IntentionFormView: ImageSelectionCard tapped for: \(imageName)")
-                            print("🖼️ Current selection state before tap: \(draftViewModel.draft.imageName == imageName)")
-                            print("🖼️ Current imageName: '\(draftViewModel.draft.imageName ?? "nil")'")
                             draftViewModel.updateImageName(imageName)
-                            print("🖼️ Current selection state after tap: \(draftViewModel.draft.imageName == imageName)")
                         }
                     }
                 }
@@ -197,10 +188,8 @@ struct OptionToggleCard: View {
     let action: () -> Void
     
     @State private var isSelected: Bool = false
-    @State private var isPressed: Bool = false
     
     var body: some View {
-        // Main card content
         HStack(spacing: 12) {
             Text(option.emoji)
                 .font(.title2)
@@ -228,32 +217,19 @@ struct OptionToggleCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(backgroundView)
         .contentShape(Rectangle())
-        .onTapGesture {
-            print("🟢 PRIMARY TAP: \(option.rawValue)")
-            handleTap()
-        }
         .highPriorityGesture(
             TapGesture().onEnded { _ in
-                print("🔥 HIGH PRIORITY TAP: \(option.rawValue)")
                 handleTap()
             }
         )
-        .simultaneousGesture(
-            TapGesture().onEnded { _ in
-                print("🟡 SIMULTANEOUS TAP: \(option.rawValue)")
-            }
-        )
-        .allowsHitTesting(true)
-        .clipped()
         .onAppear {
             setupInitialState()
         }
         .onReceive(draftViewModel.objectWillChange) { _ in
-            updateStateOptimized()
+            updateState()
         }
     }
     
-    // Separate background view to reduce complexity
     private var backgroundView: some View {
         RoundedRectangle(cornerRadius: 12)
             .fill(isSelected ? Color.blue.opacity(0.1) : Color.gray.opacity(0.05))
@@ -263,30 +239,19 @@ struct OptionToggleCard: View {
             )
     }
     
-    // Optimized tap handler
     private func handleTap() {
-        print("🟢 EXECUTING: \(option.rawValue)")
-        
-        // Haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
-        
         action()
-        print("🟢 COMPLETED: \(option.rawValue)")
     }
     
-    // Optimized setup
     private func setupInitialState() {
-        let currentSelection = draftViewModel.draft.selectedOptions.contains(option)
-        print("🔵 SETUP: \(option.rawValue) = \(currentSelection)")
-        isSelected = currentSelection
+        isSelected = draftViewModel.draft.selectedOptions.contains(option)
     }
     
-    // Optimized state update
-    private func updateStateOptimized() {
+    private func updateState() {
         let newIsSelected = draftViewModel.draft.selectedOptions.contains(option)
         if newIsSelected != isSelected {
-            print("🔄 UPDATE: \(option.rawValue) -> \(newIsSelected)")
             isSelected = newIsSelected
         }
     }
@@ -298,7 +263,6 @@ struct ImageSelectionCard: View {
     let action: () -> Void
     
     @State private var isSelected: Bool = false
-    @State private var isPressed: Bool = false // Add press state for visual feedback
     
     var body: some View {
         ZStack {
@@ -337,61 +301,21 @@ struct ImageSelectionCard: View {
                 .padding(4)
             }
         }
-        .scaleEffect(isPressed ? 0.95 : 1.0) // Add press animation
-        .animation(.easeInOut(duration: 0.1), value: isPressed)
-        .contentShape(Rectangle()) // Ensure entire area is tappable
-        .onTapGesture {
-            print("🖼️ ImageSelectionCard: TAP GESTURE triggered for \(imageName)")
-            print("🖼️ ImageSelectionCard: Current isSelected state: \(isSelected)")
-            print("🖼️ ImageSelectionCard: Current draft imageName: '\(draftViewModel.draft.imageName ?? "nil")'")
-            
-            // Add haptic feedback
-            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-            impactFeedback.impactOccurred()
-            
-            // Visual feedback
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isPressed = true
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.easeInOut(duration: 0.1)) {
-                    isPressed = false
-                }
-            }
-            
-            action()
-            print("🖼️ ImageSelectionCard: Action completed for \(imageName)")
-        }
+        .contentShape(Rectangle())
         .highPriorityGesture(
             TapGesture().onEnded { _ in
-                print("🔥 HIGH PRIORITY IMAGE TAP: \(imageName)")
-                
-                // Add haptic feedback
                 let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                 impactFeedback.impactOccurred()
-                
                 action()
-                print("🔥 HIGH PRIORITY IMAGE COMPLETED: \(imageName)")
-            }
-        )
-        .simultaneousGesture(
-            TapGesture().onEnded { _ in
-                print("🟡 SIMULTANEOUS IMAGE TAP: \(imageName)")
             }
         )
         .onAppear {
-            let currentSelection = draftViewModel.draft.imageName == imageName
-            print("🖼️ ImageSelectionCard: Appeared for \(imageName) with isSelected: \(currentSelection)")
-            print("🖼️ ImageSelectionCard: Current draft imageName: '\(draftViewModel.draft.imageName ?? "nil")'")
-            isSelected = currentSelection
+            isSelected = draftViewModel.draft.imageName == imageName
         }
         .onReceive(draftViewModel.objectWillChange) { _ in
             DispatchQueue.main.async {
                 let newIsSelected = draftViewModel.draft.imageName == imageName
                 if newIsSelected != isSelected {
-                    print("🖼️ ImageSelectionCard: Selection changed for \(imageName) from \(isSelected) to \(newIsSelected)")
-                    print("🖼️ ImageSelectionCard: Updated draft imageName: '\(draftViewModel.draft.imageName ?? "nil")'")
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isSelected = newIsSelected
                     }

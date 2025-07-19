@@ -19,51 +19,34 @@ class IntentionDraftViewModel: ObservableObject {
     
     // MARK: - Draft Update Methods
     func updateTitle(_ title: String) {
-        print("🔄 IntentionDraftViewModel: updateTitle called with: '\(title)'")
         objectWillChange.send()
         draft.title = title
-        print("✅ IntentionDraftViewModel: title updated to: '\(draft.title)'")
     }
     
     func updateReminderTime(_ time: Date?) {
-        print("🔄 IntentionDraftViewModel: updateReminderTime called with: \(time?.description ?? "nil")")
         objectWillChange.send()
         draft.reminderTime = time
-        print("✅ IntentionDraftViewModel: reminderTime updated to: \(draft.reminderTime?.description ?? "nil")")
     }
     
     func updateRepeatPattern(_ pattern: RepeatPattern) {
-        print("🔄 IntentionDraftViewModel: updateRepeatPattern called with: \(pattern.rawValue)")
         objectWillChange.send()
         draft.repeatPattern = pattern
-        print("✅ IntentionDraftViewModel: repeatPattern updated to: \(draft.repeatPattern.rawValue)")
     }
     
     func toggleTrackingOption(_ option: GoalOption) {
-        print("🔄 IntentionDraftViewModel: toggleTrackingOption called with: \(option.rawValue)")
-        print("📊 Current selectedOptions before toggle: \(draft.selectedOptions.map { $0.rawValue })")
-        
         objectWillChange.send()
         var newOptions = draft.selectedOptions
         if newOptions.contains(option) {
-            print("➖ Removing option: \(option.rawValue)")
             newOptions.remove(option)
         } else {
-            print("➕ Adding option: \(option.rawValue)")
             newOptions.insert(option)
         }
-        
         draft.selectedOptions = newOptions
-        print("✅ IntentionDraftViewModel: selectedOptions updated to: \(draft.selectedOptions.map { $0.rawValue })")
-        print("📊 Total options count: \(draft.selectedOptions.count)")
     }
     
     func updateImageName(_ imageName: String?) {
-        print("🔄 IntentionDraftViewModel: updateImageName called with: '\(imageName ?? "nil")'")
-        print("🖼️ Current imageName before update: '\(draft.imageName ?? "nil")'")
         objectWillChange.send()
         draft.imageName = imageName
-        print("✅ IntentionDraftViewModel: imageName updated to: '\(draft.imageName ?? "nil")'")
     }
     
     func handleChatMessage(_ text: String) {
