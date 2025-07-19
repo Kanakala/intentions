@@ -363,6 +363,23 @@ struct ImageSelectionCard: View {
             action()
             print("🖼️ ImageSelectionCard: Action completed for \(imageName)")
         }
+        .highPriorityGesture(
+            TapGesture().onEnded { _ in
+                print("🔥 HIGH PRIORITY IMAGE TAP: \(imageName)")
+                
+                // Add haptic feedback
+                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                impactFeedback.impactOccurred()
+                
+                action()
+                print("🔥 HIGH PRIORITY IMAGE COMPLETED: \(imageName)")
+            }
+        )
+        .simultaneousGesture(
+            TapGesture().onEnded { _ in
+                print("🟡 SIMULTANEOUS IMAGE TAP: \(imageName)")
+            }
+        )
         .onAppear {
             let currentSelection = draftViewModel.draft.imageName == imageName
             print("🖼️ ImageSelectionCard: Appeared for \(imageName) with isSelected: \(currentSelection)")
