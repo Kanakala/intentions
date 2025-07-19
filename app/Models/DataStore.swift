@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 class DataStore: ObservableObject {
     @Published var goals: [Goal] = []
@@ -7,21 +8,44 @@ class DataStore: ObservableObject {
     private let goalsKey = "saved_goals"
     private let reflectionsKey = "saved_reflections"
     private var reorderWorkItem: DispatchWorkItem?
+    private var saveWorkItem: DispatchWorkItem?
+    private let saveDebounceInterval: TimeInterval = 0.5
     
     init() {
         loadData()
+        setupAppLifecycleObservers()
+    }
+    
+    deinit {
+        // Force save any pending changes when DataStore is deallocated
+        forceSave()
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    private func setupAppLifecycleObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func appWillResignActive() {
+        // Force save when app goes to background to prevent data loss
+        forceSave()
     }
     
     func saveGoal(_ goal: Goal) {
         var newGoal = goal
         newGoal.order = goals.count // Assign next order number
         goals.append(newGoal)
-        saveData()
+        scheduleSave()
     }
     
     func saveReflection(_ reflection: DailyReflection) {
         reflections.append(reflection)
-        saveData()
+        scheduleSave()
     }
     
     func getReflectionsForGoal(_ goalId: UUID) -> [DailyReflection] {
@@ -32,20 +56,20 @@ class DataStore: ObservableObject {
     func updateGoal(_ updatedGoal: Goal) {
         if let idx = goals.firstIndex(where: { $0.id == updatedGoal.id }) {
             goals[idx] = updatedGoal
-            saveData()
+            scheduleSave()
         }
     }
     
     func deleteGoal(_ goal: Goal) {
         goals.removeAll { $0.id == goal.id }
         reflections.removeAll { $0.goalId == goal.id }
-        saveData()
+        scheduleSave()
     }
     
     func archiveGoal(_ goal: Goal) {
         if let idx = goals.firstIndex(where: { $0.id == goal.id }) {
             goals[idx].isArchived = true
-            saveData()
+            scheduleSave()
         }
     }
     
@@ -57,7 +81,7 @@ class DataStore: ObservableObject {
             isArchived: false
         )
         goals.append(newGoal)
-        saveData()
+        scheduleSave()
     }
     
     func reorderGoals(from source: IndexSet, to destination: Int) {
@@ -81,12 +105,34 @@ class DataStore: ObservableObject {
             
             DispatchQueue.main.async {
                 self.objectWillChange.send()
-                self.saveData()
+                self.scheduleSave()
             }
         }
         
         reorderWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+    }
+    
+    // MARK: - Debounced Saving
+    /// Schedules a save operation with debouncing to prevent excessive disk I/O.
+    /// Multiple calls within the debounce interval will be batched into a single save.
+    private func scheduleSave() {
+        // Cancel any pending save operations
+        saveWorkItem?.cancel()
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.saveData()
+        }
+        
+        saveWorkItem = workItem
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
+    }
+    
+    /// Forces an immediate save, canceling any pending debounced saves.
+    /// Used when app goes to background or DataStore is deallocated.
+    func forceSave() {
+        saveWorkItem?.cancel()
+        saveData()
     }
     
     var sortedGoals: [Goal] {
@@ -98,13 +144,29 @@ class DataStore: ObservableObject {
         }
     }
     
+    /// Performs the actual data persistence to UserDefaults.
+    /// JSON encoding is done on a background thread to avoid blocking the main thread.
+    /// UserDefaults writes are performed on main thread as they're thread-safe and fast.
     private func saveData() {
-        if let encodedGoals = try? JSONEncoder().encode(goals) {
-            UserDefaults.standard.set(encodedGoals, forKey: goalsKey)
-        }
+        // Perform encoding and saving on background queue
+        let goalsToSave = goals
+        let reflectionsToSave = reflections
         
-        if let encodedReflections = try? JSONEncoder().encode(reflections) {
-            UserDefaults.standard.set(encodedReflections, forKey: reflectionsKey)
+        DispatchQueue.global(qos: .utility).async {
+            // Encode data on background thread
+            let encodedGoals = try? JSONEncoder().encode(goalsToSave)
+            let encodedReflections = try? JSONEncoder().encode(reflectionsToSave)
+            
+            // Write to UserDefaults on main thread (UserDefaults is thread-safe but UI updates aren't)
+            DispatchQueue.main.async {
+                if let encodedGoals = encodedGoals {
+                    UserDefaults.standard.set(encodedGoals, forKey: self.goalsKey)
+                }
+                
+                if let encodedReflections = encodedReflections {
+                    UserDefaults.standard.set(encodedReflections, forKey: self.reflectionsKey)
+                }
+            }
         }
     }
     
@@ -129,7 +191,7 @@ class DataStore: ObservableObject {
             
             // Save updated goals if we made changes
             if needsUpdate {
-                saveData()
+                scheduleSave()
             }
         }
         
