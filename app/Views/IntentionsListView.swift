@@ -413,118 +413,115 @@ struct EditIntentionView: View {
     @Environment(\.dismiss) private var dismiss
     let goal: Goal
     @ObservedObject var dataStore: DataStore
-    @State private var intention: String
-    @State private var selectedOptions: Set<GoalOption>
-    @State private var selectedImageName: String?
-    
-    let availableImages = [
-        "run1.png", "run2.png", "run3.png", "read.png", "meditation.png",
-        "image1.jpeg", "image2.jpeg", "image3.jpeg", "image4.jpeg"
-    ]
-    
-    var imagePickerRow: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(availableImages, id: \.self) { imageName in
-                        ZStack {
-                            if let uiImage = UIImage(named: imageName) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 80, height: 60)
-                                    .clipped()
-                                    .cornerRadius(10)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(selectedImageName == imageName ? Color.blue : Color.clear, lineWidth: 3)
-                                    )
-                            } else {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 80, height: 60)
-                                    .overlay(
-                                        Text("?")
-                                            .foregroundColor(.gray)
-                                    )
-                            }
-                            if selectedImageName == imageName {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.blue)
-                                    .offset(x: 28, y: -22)
-                            }
-                        }
-                        .id(imageName) // Add ID for scrolling
-                        .onTapGesture {
-                            print("Edit mode - Selected image: \(imageName)")
-                            selectedImageName = imageName
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-            .frame(height: 80)
-            .onAppear {
-                // Scroll to selected image when view appears
-                if let selectedImage = selectedImageName {
-                    print("Edit mode - Scrolling to selected image: \(selectedImage)")
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        proxy.scrollTo(selectedImage, anchor: .center)
-                    }
-                }
-            }
-        }
-    }
+    @StateObject private var draftViewModel: IntentionDraftViewModel
+    @State private var isChatVisible = false
     
     init(goal: Goal, dataStore: DataStore) {
         self.goal = goal
         self.dataStore = dataStore
-        _intention = State(initialValue: goal.intention)
-        _selectedOptions = State(initialValue: goal.selectedOptions)
-        _selectedImageName = State(initialValue: goal.imageName)
+        
+        // Initialize the draft view model with existing goal data
+        let initialDraft = IntentionDraft(
+            title: goal.intention,
+            reminderTime: goal.reminderTime,
+            repeatPattern: .daily, // Default for now
+            durationInMinutes: nil,
+            checkInPrompt: nil,
+            selectedOptions: goal.selectedOptions,
+            imageName: goal.imageName
+        )
+        
+        _draftViewModel = StateObject(wrappedValue: IntentionDraftViewModel(initialDraft: initialDraft))
     }
     
     var body: some View {
         NavigationView {
-            Form {
-                Section(header: Text("Intention")) {
-                    TextField("e.g. Meditate daily", text: $intention)
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Header
+                        headerSection
+                        
+                        // Form
+                        IntentionFormView(draftViewModel: draftViewModel)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                 }
-                Section(header: Text("Support Options")) {
-                    ForEach(GoalOption.allCases) { option in
-                        Toggle(isOn: Binding(
-                            get: { selectedOptions.contains(option) },
-                            set: { isOn in
-                                if isOn { selectedOptions.insert(option) } else { selectedOptions.remove(option) }
-                            }
-                        )) {
-                            Text(option.emoji + " " + option.description)
-                        }
+                
+                // Floating Chat Bubble
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        FloatingChatBubbleButton(isVisible: $isChatVisible)
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 20)
                     }
                 }
-                Section(header: Text("Card Image")) {
-                    imagePickerRow
+                
+                // Chat Assistant Balloon
+                if isChatVisible {
+                    ChatAssistantBalloonView(
+                        isVisible: $isChatVisible,
+                        draftViewModel: draftViewModel
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(1)
                 }
             }
             .navigationTitle("Edit Intention")
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        // Create updated goal using a simpler approach
-                        var updatedGoal = goal
-                        updatedGoal.intention = intention
-                        updatedGoal.selectedOptions = selectedOptions
-                        updatedGoal.imageName = selectedImageName
+                        // Create updated goal using the draft
+                        let updatedGoal = draftViewModel.createGoal(from: goal)
                         dataStore.updateGoal(updatedGoal)
                         dismiss()
                     }
-                    .disabled(intention.isEmpty)
+                    .disabled(draftViewModel.draft.title.isEmpty)
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        dismiss()
+                    }
                 }
             }
         }
+        .onTapGesture {
+            // Dismiss chat when tapping outside
+            if isChatVisible {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isChatVisible = false
+                }
+            }
+        }
+    }
+    
+    private var headerSection: some View {
+        VStack(spacing: 15) {
+            Image(systemName: "pencil.circle")
+                .font(.system(size: 40))
+                .foregroundColor(.blue)
+            
+            Text("Edit Your Intention")
+                .font(.title2)
+                .fontWeight(.semibold)
+            
+            Text("Update your intention using the form below or chat with our AI assistant")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemBackground))
+        .cornerRadius(18)
+        .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
     }
 }
 
