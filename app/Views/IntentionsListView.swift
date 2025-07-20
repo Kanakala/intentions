@@ -85,6 +85,11 @@ struct IntentionCardView: View {
     @State private var showingArchiveAlert = false
     @State private var showingDuplicateAlert = false
     
+    // Cached display data for performance
+    private var displayStatus: GoalDisplayStatus {
+        dataStore.getDisplayStatusForGoal(goal.id)
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // 1. Header Row
@@ -153,24 +158,22 @@ struct IntentionCardView: View {
                         gradient: Gradient(colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)]),
                         startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(height: 120)
-                if let imageName = goal.imageName {
-                    if let uiImage = UIImage(named: imageName) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 120)
-                            .clipped()
-                            .cornerRadius(16)
-                            .opacity(0.7)
-                            .allowsHitTesting(false)
-                    } else {
-                        // Fallback to system image if asset not found
-                        Image(systemName: "photo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 60)
-                            .opacity(0.3)
-                    }
+                if let uiImage = dataStore.getCachedImage(named: goal.imageName) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 120)
+                        .clipped()
+                        .cornerRadius(16)
+                        .opacity(0.7)
+                        .allowsHitTesting(false)
+                } else if goal.imageName != nil {
+                    // Fallback to system image if asset not found
+                    Image(systemName: "photo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 60)
+                        .opacity(0.3)
                 } else {
                     Image(systemName: "photo")
                         .resizable()
@@ -182,7 +185,7 @@ struct IntentionCardView: View {
             
             // 3. Progress Bar + Streak
             HStack(spacing: 12) {
-                ProgressView(value: progress)
+                ProgressView(value: displayStatus.progressValue)
                     .frame(width: 120)
                 if goal.streakCount > 0 {
                     HStack(spacing: 4) {
@@ -196,11 +199,13 @@ struct IntentionCardView: View {
             
             // 4. Last Reflection Info
             HStack(spacing: 8) {
-                if let last = lastReflection {
-                    Text("Last log: \(last.date.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.caption)
-                    if let mood = last.mood {
-                        Text(mood.emoji)
+                if displayStatus.hasAnyReflections {
+                    if let formattedDate = displayStatus.formattedLastReflectionDate {
+                        Text("Last log: \(formattedDate)")
+                            .font(.caption)
+                    }
+                    if let moodEmoji = displayStatus.lastReflectionMoodEmoji {
+                        Text(moodEmoji)
                     }
                 } else {
                     Text("No logs yet")
@@ -214,16 +219,16 @@ struct IntentionCardView: View {
                 Button(action: {
                     onTap()
                 }) {
-                    Text(loggedToday ? "Logged Today" : "Log Today")
+                    Text(displayStatus.isLoggedToday ? "Logged Today" : "Log Today")
                         .font(.subheadline)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 8)
-                        .background(loggedToday ? Color.gray.opacity(0.2) : Color.blue)
-                        .foregroundColor(loggedToday ? .gray : .white)
+                        .background(displayStatus.isLoggedToday ? Color.gray.opacity(0.2) : Color.blue)
+                        .foregroundColor(displayStatus.isLoggedToday ? .gray : .white)
                         .cornerRadius(20)
-                        .shadow(radius: loggedToday ? 0 : 2)
+                        .shadow(radius: displayStatus.isLoggedToday ? 0 : 2)
                 }
-                .disabled(loggedToday)
+                .disabled(displayStatus.isLoggedToday)
                 
                 Spacer()
                 Button(action: {
@@ -282,21 +287,8 @@ struct IntentionCardView: View {
         }
     }
     
-    // MARK: - Helpers
-    var lastReflection: DailyReflection? {
-        dataStore.getReflectionsForGoal(goal.id).first
-    }
-    var loggedToday: Bool {
-        if let last = lastReflection {
-            return Calendar.current.isDateInToday(last.date)
-        }
-        return false
-    }
-    var progress: Double {
-        let weekStart = Calendar.current.date(from: Calendar.current.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())) ?? Date()
-        let weekReflections = dataStore.getReflectionsForGoal(goal.id).filter { $0.date >= weekStart }
-        return Double(weekReflections.count) / 5.0
-    }
+    // MARK: - Cached display data eliminates redundant computations
+    // All display values are now pre-computed and cached in displayStatus
 }
 
 struct EditIntentionView: View {
@@ -470,6 +462,11 @@ struct InsightsView: View {
     let goal: Goal
     @ObservedObject var dataStore: DataStore
     
+    // Cached display data for performance
+    private var displayStatus: GoalDisplayStatus {
+        dataStore.getDisplayStatusForGoal(goal.id)
+    }
+    
     var body: some View {
         NavigationView {
             List {
@@ -477,7 +474,7 @@ struct InsightsView: View {
                     HStack {
                         Text("Reflection Rate")
                         Spacer()
-                        Text("\(Int(progress * 100))%")
+                        Text(displayStatus.progressPercentage)
                             .foregroundColor(.secondary)
                     }
                     if goal.streakCount > 0 {
@@ -494,7 +491,7 @@ struct InsightsView: View {
                     HStack {
                         Text("Total Reflections")
                         Spacer()
-                        Text("\(dataStore.getReflectionsForGoal(goal.id).count)")
+                        Text("\(dataStore.getReflectionCountForGoal(goal.id))")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -506,11 +503,5 @@ struct InsightsView: View {
                 }
             }
         }
-    }
-    
-    private var progress: Double {
-        let weekStart = Calendar.current.date(from: Calendar.current.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())) ?? Date()
-        let weekReflections = dataStore.getReflectionsForGoal(goal.id).filter { $0.date >= weekStart }
-        return Double(weekReflections.count) / 5.0
     }
 } 

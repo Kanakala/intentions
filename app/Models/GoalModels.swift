@@ -363,3 +363,49 @@ struct ChatIntentParser {
         return options.isEmpty ? nil : options
     }
 } 
+
+// MARK: - Cached Display Data
+struct GoalDisplayStatus {
+    let isLoggedToday: Bool
+    let formattedLastReflectionDate: String?
+    let progressPercentage: String
+    let progressValue: Double
+    let hasAnyReflections: Bool
+    let lastReflectionMoodEmoji: String?
+    
+    // Memberwise initializer for computed values
+    init(isLoggedToday: Bool, formattedLastReflectionDate: String?, progressPercentage: String, progressValue: Double, hasAnyReflections: Bool, lastReflectionMoodEmoji: String?) {
+        self.isLoggedToday = isLoggedToday
+        self.formattedLastReflectionDate = formattedLastReflectionDate
+        self.progressPercentage = progressPercentage
+        self.progressValue = progressValue
+        self.hasAnyReflections = hasAnyReflections
+        self.lastReflectionMoodEmoji = lastReflectionMoodEmoji
+    }
+    
+    init(goal: Goal, lastReflection: DailyReflection?, weeklyProgress: Double, dateFormatter: DateFormatter, percentageFormatter: NumberFormatter) {
+        self.progressValue = weeklyProgress
+        self.progressPercentage = percentageFormatter.string(from: NSNumber(value: weeklyProgress)) ?? "0%"
+        
+        if let lastReflection = lastReflection {
+            self.hasAnyReflections = true
+            self.isLoggedToday = Calendar.current.isDateInToday(lastReflection.date)
+            self.formattedLastReflectionDate = dateFormatter.string(from: lastReflection.date)
+            self.lastReflectionMoodEmoji = lastReflection.mood?.emoji
+        } else {
+            self.hasAnyReflections = false
+            self.isLoggedToday = false
+            self.formattedLastReflectionDate = nil
+            self.lastReflectionMoodEmoji = nil
+        }
+    }
+    
+    static let empty = GoalDisplayStatus(
+        isLoggedToday: false,
+        formattedLastReflectionDate: nil,
+        progressPercentage: "0%",
+        progressValue: 0.0,
+        hasAnyReflections: false,
+        lastReflectionMoodEmoji: nil
+    )
+} 
