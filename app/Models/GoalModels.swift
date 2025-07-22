@@ -364,6 +364,70 @@ struct ChatIntentParser {
     }
 } 
 
+// MARK: - Filter and Sort Models
+enum GoalSortOption: String, CaseIterable, Identifiable {
+    case manual = "Manual Order"
+    case newest = "Newest First"
+    case oldest = "Oldest First"
+    case alphabetical = "A to Z"
+    case alphabeticalReverse = "Z to A"
+    case streakHigh = "Highest Streak"
+    case streakLow = "Lowest Streak"
+    case mostActive = "Most Active"
+    case leastActive = "Least Active"
+    
+    var id: String { self.rawValue }
+    
+    var systemImage: String {
+        switch self {
+        case .manual: return "hand.draw"
+        case .newest: return "calendar.badge.plus"
+        case .oldest: return "calendar"
+        case .alphabetical: return "textformat.abc"
+        case .alphabeticalReverse: return "textformat.abc"
+        case .streakHigh: return "flame.fill"
+        case .streakLow: return "flame"
+        case .mostActive: return "chart.line.uptrend.xyaxis"
+        case .leastActive: return "chart.line.downtrend.xyaxis"
+        }
+    }
+}
+
+enum GoalFilterOption: String, CaseIterable, Identifiable {
+    case all = "All Intentions"
+    case active = "Active Only"
+    case archived = "Archived Only"
+    case loggedToday = "Logged Today"
+    case notLoggedToday = "Not Logged Today"
+    case hasStreak = "Has Streak"
+    case noStreak = "No Streak"
+    case hasReminder = "Has Reminder"
+    case noReminder = "No Reminder"
+    
+    var id: String { self.rawValue }
+    
+    var systemImage: String {
+        switch self {
+        case .all: return "list.bullet"
+        case .active: return "checkmark.circle"
+        case .archived: return "archivebox"
+        case .loggedToday: return "checkmark.circle.fill"
+        case .notLoggedToday: return "circle"
+        case .hasStreak: return "flame.fill"
+        case .noStreak: return "flame"
+        case .hasReminder: return "bell.fill"
+        case .noReminder: return "bell.slash"
+        }
+    }
+}
+
+struct IntentionsFilterState {
+    var searchText: String = ""
+    var sortOption: GoalSortOption = .manual
+    var filterOption: GoalFilterOption = .active
+    var showFilterPanel: Bool = false
+}
+
 // MARK: - Cached Display Data
 struct GoalDisplayStatus {
     let isLoggedToday: Bool

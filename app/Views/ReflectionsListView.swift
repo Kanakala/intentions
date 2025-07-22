@@ -1,5 +1,14 @@
 import SwiftUI
 
+/// ReflectionsListView - Fixed to remove problematic scroll optimizations
+/// PERFORMANCE OPTIMIZATIONS KEPT:
+/// - Cached reflection lookups from DataStore
+/// - Efficient date formatting
+/// 
+/// REVERTED (PROBLEMATIC):
+/// - LazyVStack replaced back with List for proper navigation
+/// - Removed scroll state tracking that caused visual glitches
+/// - Removed dynamic complexity that broke user experience
 struct ReflectionsListView: View {
     let goal: Goal
     @ObservedObject var dataStore: DataStore
@@ -11,14 +20,18 @@ struct ReflectionsListView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(reflections) { reflection in
-                    NavigationLink(destination: ReflectionDetailView(reflection: reflection, goal: goal)) {
-                        ReflectionRowView(reflection: reflection)
+            ZStack(alignment: .bottomTrailing) {
+                // FIXED: Back to List for proper navigation and performance
+                List {
+                    ForEach(reflections) { reflection in
+                        NavigationLink(destination: ReflectionDetailView(reflection: reflection, goal: goal)) {
+                            ReflectionRowView(reflection: reflection)
+                        }
                     }
                 }
+                .listStyle(.plain)
+                .background(Color(.systemGroupedBackground))
             }
-            .navigationTitle("Your Journey")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
@@ -29,39 +42,85 @@ struct ReflectionsListView: View {
                     }
                 }
             }
+            .navigationTitle("Your Journey")
             .sheet(isPresented: $showingNewReflection) {
                 DailyReflectionView(goal: goal, onDismiss: {
                     showingNewReflection = false
                 })
             }
         }
-        .onAppear {
-            // View appeared
-        }
     }
 }
 
+// MARK: - SIMPLIFIED: ReflectionRowView without problematic scroll optimizations
 struct ReflectionRowView: View {
     let reflection: DailyReflection
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(reflection.date.formatted(date: .long, time: .shortened))
-                .font(.headline)
-            
-            if let mood = reflection.mood {
-                HStack {
-                    Text(mood.emoji)
-                    Text(mood.rawValue)
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(formatDate(reflection.date))
+                        .font(.system(size: 18, weight: .semibold))
+                    
+                    Text(formatTime(reflection.date))
+                        .font(.caption)
                         .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if let mood = reflection.mood {
+                    VStack(spacing: 2) {
+                        Text(mood.emoji)
+                            .font(.title2)
+                        
+                        Text(mood.rawValue)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             
-            Text("\(reflection.responses.count) responses")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("\(reflection.responses.count) responses")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
-        .padding(.vertical, 8)
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 1)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+        )
+    }
+    
+    // MARK: - Simple Date Formatting (keeping this optimization)
+    private func formatDate(_ date: Date) -> String {
+        if Calendar.current.isDateInToday(date) {
+            return "Today"
+        } else if Calendar.current.isDateInYesterday(date) {
+            return "Yesterday"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            return formatter.string(from: date)
+        }
+    }
+    
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 

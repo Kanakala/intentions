@@ -94,7 +94,8 @@ struct ChatAssistantBalloonView: View {
                 .padding(.vertical, 8)
             }
             .onChange(of: draftViewModel.chatMessages.count) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak draftViewModel] in
+                    guard let draftViewModel = draftViewModel else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
                         if let lastMessage = draftViewModel.chatMessages.last {
                             proxy.scrollTo(lastMessage.id, anchor: .bottom)
@@ -103,7 +104,8 @@ struct ChatAssistantBalloonView: View {
                 }
             }
             .onChange(of: draftViewModel.isProcessingMessage) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak draftViewModel] in
+                    guard let draftViewModel = draftViewModel else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
                         if draftViewModel.isProcessingMessage {
                             proxy.scrollTo("typing", anchor: .bottom)

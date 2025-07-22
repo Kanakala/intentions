@@ -1,57 +1,95 @@
 import SwiftUI
 
+/// IntentionsListView with performance optimizations that don't break core functionality
+/// PERFORMANCE OPTIMIZATIONS KEPT:
+/// - Cached display data (eliminates redundant computations)
+/// - Efficient image loading with caching
+/// - Debounced saving and view updates
+/// 
+/// REVERTED (PROBLEMATIC):
+/// - LazyVStack replaced back with List for drag/drop support
+/// - Removed scroll state tracking that caused "pending state" bugs
+/// - Removed dynamic visual complexity that broke user experience
 struct IntentionsListView: View {
     @ObservedObject var dataStore: DataStore
     @State private var showingAddIntention = false
     @State private var selectedGoal: Goal?
+    @State private var filterState = IntentionsFilterState()
     @Environment(\.editMode) private var editMode
+    
+    // Computed property for filtered goals
+    private var displayedGoals: [Goal] {
+        dataStore.filteredGoals(with: filterState)
+    }
     
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                List {
-                    ForEach(dataStore.goals) { goal in
-                        let isInEditMode = editMode?.wrappedValue.isEditing == true
-                        IntentionCardView(
-                            goal: goal, 
-                            dataStore: dataStore,
-                            isEditMode: isInEditMode,
-                            onTap: {
-                                selectedGoal = goal
-                            }
-                        )
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                    }
-                    .onMove { source, destination in
-                        dataStore.reorderGoals(from: source, to: destination)
-                    }
-                }
-                .listStyle(PlainListStyle())
+            VStack(spacing: 0) {
+                // Filter Interface
+                IntentionsFilterView(
+                    filterState: $filterState,
+                    goalCount: dataStore.goals.filter { !$0.isArchived }.count,
+                    filteredCount: displayedGoals.count
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
                 
-                Button(action: { 
-                    showingAddIntention = true 
-                }) {
-                    HStack {
-                        Image(systemName: "plus")
-                        Text("Add Intention")
+                ZStack(alignment: .bottomTrailing) {
+                    // Main List
+                    if displayedGoals.isEmpty {
+                        emptyStateView
+                    } else {
+                        List {
+                            ForEach(displayedGoals) { goal in
+                                IntentionCardView(
+                                    goal: goal, 
+                                    dataStore: dataStore,
+                                    isEditMode: editMode?.wrappedValue.isEditing == true,
+                                    onTap: {
+                                        selectedGoal = goal
+                                    }
+                                )
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                            }
+                            .onMove { source, destination in
+                                // Only allow reordering in manual sort mode
+                                if filterState.sortOption == .manual {
+                                    dataStore.reorderGoals(from: source, to: destination)
+                                }
+                            }
+                        }
+                        .listStyle(.plain)
+                        .background(Color(.systemGroupedBackground))
+                    }
+                    
+                    // Add Intention Button
+                    Button(action: { 
+                        showingAddIntention = true 
+                    }) {
+                        HStack {
+                            Image(systemName: "plus")
+                            Text("Add Intention")
+                        }
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(30)
+                        .shadow(radius: 4)
                     }
                     .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(30)
-                    .shadow(radius: 4)
-                }
-                .padding()
-                .sheet(isPresented: $showingAddIntention) {
-                    CreateIntentionScreen(dataStore: dataStore)
                 }
             }
             .navigationTitle("Your Intentions")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                EditButton()
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    EditButton()
+                        .disabled(filterState.sortOption != .manual) // Disable edit when not in manual sort
+                }
+            }
+            .sheet(isPresented: $showingAddIntention) {
+                CreateIntentionScreen(dataStore: dataStore)
             }
             .navigationDestination(isPresented: Binding(
                 get: { selectedGoal != nil },
@@ -68,8 +106,57 @@ struct IntentionsListView: View {
                 }
             }
         }
+        .onAppear {
+            // Preload images for better performance (keeping this optimization)
+            dataStore.preloadImages(for: dataStore.goals)
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: filterState.searchText.isEmpty ? "target" : "magnifyingglass")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary.opacity(0.5))
+            
+            Text(filterState.searchText.isEmpty ? "No intentions found" : "No matching intentions")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+            
+            if !filterState.searchText.isEmpty {
+                Text("Try adjusting your search or filters")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                Button("Clear Search") {
+                    withAnimation {
+                        filterState.searchText = ""
+                    }
+                }
+                .foregroundColor(.blue)
+            } else if filterState.filterOption != .active {
+                Text("Try changing your filter settings")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                Button("Show All Active") {
+                    withAnimation {
+                        filterState.filterOption = .active
+                    }
+                }
+                .foregroundColor(.blue)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
     }
 }
+
+// MARK: - REMOVED: Problematic OptimizedIntentionCardView that caused "pending state" bugs
+// Keeping only the working IntentionCardView with cached display optimizations
 
 struct IntentionCardView: View {
     let goal: Goal

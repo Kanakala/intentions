@@ -115,7 +115,8 @@ struct DailyReflectionView: View {
                 }
                 
                 // Dismiss after animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak viewModel] in
+                    guard let viewModel = viewModel else { return }
                     withAnimation {
                         viewModel.showSuccessAnimation = false
                         onDismiss()

@@ -2,6 +2,9 @@ import Foundation
 import Combine
 import os.log
 
+/// DailyReflectionViewModel with optimized view updates
+/// PERFORMANCE OPTIMIZATION: Removed manual objectWillChange.send() calls
+/// @Published properties automatically trigger UI updates when changed
 class DailyReflectionViewModel: ObservableObject {
     @Published var currentGoal: Goal?
     @Published var currentReflection: DailyReflection?
@@ -18,11 +21,15 @@ class DailyReflectionViewModel: ObservableObject {
         self.currentReflection = DailyReflection(goalId: goal.id)
     }
     
+    deinit {
+        // MEMORY LEAK PREVENTION: Cancel all Combine subscriptions
+        cancellables.removeAll()
+    }
+    
     func submitResponse(for action: DailyAction, value: String) {
         actionResponses[action.id] = value
         // Optionally update currentReflection if needed for legacy code
         // No longer mutating currentReflection.responses directly for UI
-        objectWillChange.send()
     }
     
     func isReflectionComplete() -> Bool {
@@ -58,7 +65,8 @@ class DailyReflectionViewModel: ObservableObject {
         // Simulate network delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             guard let self = self else {
-                self?.logger.error("Self was deallocated during submission")
+                // Use logger from outside the closure to avoid potential retain cycle
+                os.Logger(subsystem: "com.yourapp", category: "DailyReflection").error("Self was deallocated during submission")
                 return
             }
             // Update goal streak
@@ -70,7 +78,8 @@ class DailyReflectionViewModel: ObservableObject {
                 self.streakMessage = self.generateStreakMessage(streak: goal.streakCount)
             }
             // Update state on main thread
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 self.isLoading = false
                 self.showSuccessAnimation = true
                 // Call completion with the reflection

@@ -1,6 +1,9 @@
 import Foundation
 import SwiftUI
 
+/// IntentionDraftViewModel with optimized view updates
+/// PERFORMANCE OPTIMIZATION: Removed manual objectWillChange.send() calls
+/// @Published properties automatically trigger UI updates when changed
 class IntentionDraftViewModel: ObservableObject {
     @Published var draft: IntentionDraft = IntentionDraft()
     @Published var chatMessages: [ChatMessage] = []
@@ -19,22 +22,18 @@ class IntentionDraftViewModel: ObservableObject {
     
     // MARK: - Draft Update Methods
     func updateTitle(_ title: String) {
-        objectWillChange.send()
         draft.title = title
     }
     
     func updateReminderTime(_ time: Date?) {
-        objectWillChange.send()
         draft.reminderTime = time
     }
     
     func updateRepeatPattern(_ pattern: RepeatPattern) {
-        objectWillChange.send()
         draft.repeatPattern = pattern
     }
     
     func toggleTrackingOption(_ option: GoalOption) {
-        objectWillChange.send()
         var newOptions = draft.selectedOptions
         if newOptions.contains(option) {
             newOptions.remove(option)
@@ -45,7 +44,6 @@ class IntentionDraftViewModel: ObservableObject {
     }
     
     func updateImageName(_ imageName: String?) {
-        objectWillChange.send()
         draft.imageName = imageName
     }
     
@@ -57,7 +55,8 @@ class IntentionDraftViewModel: ObservableObject {
         isProcessingMessage = true
         
         // 3. Parse the message after a brief delay (simulate processing)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
             self.processMessage(text)
             self.isProcessingMessage = false
         }

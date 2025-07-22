@@ -313,7 +313,8 @@ struct ImageSelectionCard: View {
             isSelected = draftViewModel.draft.imageName == imageName
         }
         .onReceive(draftViewModel.objectWillChange) { _ in
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak draftViewModel] in
+                guard let draftViewModel = draftViewModel else { return }
                 let newIsSelected = draftViewModel.draft.imageName == imageName
                 if newIsSelected != isSelected {
                     withAnimation(.easeInOut(duration: 0.2)) {
