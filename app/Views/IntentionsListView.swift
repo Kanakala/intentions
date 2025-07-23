@@ -1,15 +1,8 @@
 import SwiftUI
+import UIKit
 
-/// IntentionsListView with performance optimizations that don't break core functionality
-/// PERFORMANCE OPTIMIZATIONS KEPT:
-/// - Cached display data (eliminates redundant computations)
-/// - Efficient image loading with caching
-/// - Debounced saving and view updates
-/// 
-/// REVERTED (PROBLEMATIC):
-/// - LazyVStack replaced back with List for drag/drop support
-/// - Removed scroll state tracking that caused "pending state" bugs
-/// - Removed dynamic visual complexity that broke user experience
+/// IntentionsListView with modern design system applied
+/// Uses SectionCard, PrimaryButton, and design tokens for consistent styling
 struct IntentionsListView: View {
     @ObservedObject var dataStore: DataStore
     @State private var showingAddIntention = false
@@ -24,68 +17,90 @@ struct IntentionsListView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Filter Interface
-                IntentionsFilterView(
-                    filterState: $filterState,
-                    goalCount: dataStore.goals.filter { !$0.isArchived }.count,
-                    filteredCount: displayedGoals.count
-                )
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+            ZStack {
+                // Background
+                AppColors.background
+                    .ignoresSafeArea()
                 
-                ZStack(alignment: .bottomTrailing) {
-                    // Main List
-                    if displayedGoals.isEmpty {
-                        emptyStateView
-                    } else {
-                        List {
-                            ForEach(displayedGoals) { goal in
-                                IntentionCardView(
-                                    goal: goal, 
-                                    dataStore: dataStore,
-                                    isEditMode: editMode?.wrappedValue.isEditing == true,
-                                    onTap: {
-                                        selectedGoal = goal
-                                    }
-                                )
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                            }
-                            .onMove { source, destination in
-                                // Only allow reordering in manual sort mode
-                                if filterState.sortOption == .manual {
-                                    dataStore.reorderGoals(from: source, to: destination)
-                                }
-                            }
-                        }
-                        .listStyle(.plain)
-                        .background(Color(.systemGroupedBackground))
+                VStack(spacing: AppSpacing.lg) {
+                    // Filter Interface - Wrapped in SectionCard
+                    SectionCard(style: .elevated, padding: .all(AppSpacing.md)) {
+                        IntentionsFilterView(
+                            filterState: $filterState,
+                            goalCount: dataStore.goals.filter { !$0.isArchived }.count,
+                            filteredCount: displayedGoals.count
+                        )
                     }
+                    .padding(.horizontal, AppSpacing.lg)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.5, dampingFraction: 0.85), value: displayedGoals)
                     
-                    // Add Intention Button
-                    Button(action: { 
-                        showingAddIntention = true 
-                    }) {
-                        HStack {
-                            Image(systemName: "plus")
-                            Text("Add Intention")
+                    // Main Content Area
+                    ZStack(alignment: .bottomTrailing) {
+                        if displayedGoals.isEmpty {
+                            emptyStateView
+                        } else {
+                            ScrollView {
+                                LazyVStack(spacing: AppSpacing.lg) {
+                                    ForEach(displayedGoals) { goal in
+                                        ModernIntentionCardView(
+                                            goal: goal, 
+                                            dataStore: dataStore,
+                                            isEditMode: editMode?.wrappedValue.isEditing == true,
+                                            onTap: {
+                                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                                    selectedGoal = goal
+                                                }
+                                            }
+                                        )
+                                        .padding(.horizontal, AppSpacing.lg)
+                                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                                        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: displayedGoals)
+                                    }
+                                }
+                                .padding(.vertical, AppSpacing.md)
+                            }
                         }
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(30)
-                        .shadow(radius: 4)
+                        
+                        // Modern Floating Action Button
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                PrimaryButton(
+                                    title: "Add Intention",
+                                    action: {
+                                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                                        generator.impactOccurred()
+                                        showingAddIntention = true
+                                    },
+                                    style: .primary,
+                                    size: .medium,
+                                    icon: "plus"
+                                )
+                                .floatingShadow()
+                            }
+                            .padding(AppSpacing.lg)
+                        }
                     }
-                    .padding()
                 }
             }
             .navigationTitle("Your Intentions")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                        .disabled(filterState.sortOption != .manual) // Disable edit when not in manual sort
+                    Button("Edit") {
+                        withAnimation(.easeInOut(duration: AppSpacing.animationMedium)) {
+                            if editMode?.wrappedValue.isEditing == true {
+                                editMode?.wrappedValue = .inactive
+                            } else {
+                                editMode?.wrappedValue = .active
+                            }
+                        }
+                    }
+                    .font(AppFonts.bodyMedium)
+                    .foregroundColor(AppColors.primary)
+                    .disabled(filterState.sortOption != .manual)
                 }
             }
             .sheet(isPresented: $showingAddIntention) {
@@ -107,58 +122,74 @@ struct IntentionsListView: View {
             }
         }
         .onAppear {
-            // Preload images for better performance (keeping this optimization)
             dataStore.preloadImages(for: dataStore.goals)
         }
     }
     
     private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: filterState.searchText.isEmpty ? "target" : "magnifyingglass")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary.opacity(0.5))
-            
-            Text(filterState.searchText.isEmpty ? "No intentions found" : "No matching intentions")
-                .font(.title2)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
-            
-            if !filterState.searchText.isEmpty {
-                Text("Try adjusting your search or filters")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
+        SectionCard(style: .subtle, padding: .all(AppSpacing.xxxl)) {
+            VStack(spacing: AppSpacing.xl) {
+                // Empty state icon
+                ZStack {
+                    Circle()
+                        .fill(AppColors.primary.opacity(0.1))
+                        .frame(width: 120, height: 120)
+                    
+                    Image(systemName: filterState.searchText.isEmpty ? "target" : "magnifyingglass")
+                        .font(.system(size: 40, weight: .medium))
+                        .foregroundColor(AppColors.primary)
+                }
                 
-                Button("Clear Search") {
-                    withAnimation {
-                        filterState.searchText = ""
+                VStack(spacing: AppSpacing.md) {
+                    Text(filterState.searchText.isEmpty ? "No intentions found" : "No matching intentions")
+                        .font(AppFonts.titleMedium)
+                        .foregroundColor(AppColors.textPrimary)
+                    
+                    if !filterState.searchText.isEmpty {
+                        Text("Try adjusting your search or filters")
+                            .font(AppFonts.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                        
+                        PrimaryButton.secondary("Clear Search") {
+                            withAnimation(.easeInOut(duration: AppSpacing.animationMedium)) {
+                                filterState.searchText = ""
+                            }
+                        }
+                        .frame(maxWidth: 200)
+                    } else if filterState.filterOption != .active {
+                        Text("Try changing your filter settings")
+                            .font(AppFonts.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                        
+                        PrimaryButton.secondary("Show All Active") {
+                            withAnimation(.easeInOut(duration: AppSpacing.animationMedium)) {
+                                filterState.filterOption = .active
+                            }
+                        }
+                        .frame(maxWidth: 200)
+                    } else {
+                        Text("Create your first intention to get started!")
+                            .font(AppFonts.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                        
+                        PrimaryButton.primary("Create Intention") {
+                            showingAddIntention = true
+                        }
+                        .frame(maxWidth: 200)
                     }
                 }
-                .foregroundColor(.blue)
-            } else if filterState.filterOption != .active {
-                Text("Try changing your filter settings")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                
-                Button("Show All Active") {
-                    withAnimation {
-                        filterState.filterOption = .active
-                    }
-                }
-                .foregroundColor(.blue)
             }
         }
-        .padding()
+        .padding(.horizontal, AppSpacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
     }
 }
 
-// MARK: - REMOVED: Problematic OptimizedIntentionCardView that caused "pending state" bugs
-// Keeping only the working IntentionCardView with cached display optimizations
-
-struct IntentionCardView: View {
+// MARK: - Modern Intention Card with Design System
+struct ModernIntentionCardView: View {
     let goal: Goal
     @ObservedObject var dataStore: DataStore
     let isEditMode: Bool
@@ -177,168 +208,37 @@ struct IntentionCardView: View {
         dataStore.getDisplayStatusForGoal(goal.id)
     }
     
+    @State private var isPressed: Bool = false
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 1. Header Row
-            HStack {
-                Text(goal.selectedOptions.first?.emoji ?? "🎯")
-                    .font(.system(size: 36))
-                Text(goal.intention)
-                    .font(.system(size: 18, weight: .semibold))
-                Spacer()
-                Menu {
-                    // Primary Actions
-                    Button(action: { 
-                        showingEditSheet = true 
-                    }) {
-                        Label("Edit Intention", systemImage: "pencil")
-                    }
-                    
-                    Button(action: { 
-                        showingReminderSheet = true 
-                    }) {
-                        Label("Add/Edit Reminder", systemImage: "bell")
-                    }
-                    
-                    Divider()
-                    
-                    // Secondary Actions
-                    Button(action: { 
-                        showingInsightsSheet = true 
-                    }) {
-                        Label("View Insights", systemImage: "chart.bar")
-                    }
-                    
-                    Button(action: { 
-                        showingArchiveAlert = true 
-                    }) {
-                        Label("Archive Intention", systemImage: "archivebox")
-                    }
-                    
-                    Button(action: { 
-                        showingDuplicateAlert = true 
-                    }) {
-                        Label("Duplicate Intention", systemImage: "plus.square.on.square")
-                    }
-                    
-                    Divider()
-                    
-                    // Danger Actions
-                    Button(action: { 
-                        showingDeleteAlert = true 
-                    }) {
-                        Label("Delete Intention", systemImage: "trash")
-                            .foregroundColor(.red)
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .foregroundColor(.gray)
-                        .padding(8)
-                        .contentShape(Rectangle())
-                }
-            }
-            
-            // 2. Image/Gradient Block
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(LinearGradient(
-                        gradient: Gradient(colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)]),
-                        startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(height: 120)
-                if let uiImage = dataStore.getCachedImage(named: goal.imageName) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(height: 120)
-                        .clipped()
-                        .cornerRadius(16)
-                        .opacity(0.7)
-                        .allowsHitTesting(false)
-                } else if goal.imageName != nil {
-                    // Fallback to system image if asset not found
-                    Image(systemName: "photo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 60)
-                        .opacity(0.3)
-                } else {
-                    Image(systemName: "photo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 60)
-                        .opacity(0.3)
-                }
-            }
-            
-            // 3. Progress Bar + Streak
-            HStack(spacing: 12) {
-                ProgressView(value: displayStatus.progressValue)
-                    .frame(width: 120)
-                if goal.streakCount > 0 {
-                    HStack(spacing: 4) {
-                        Text("🔥")
-                        Text("\(goal.streakCount)-day streak!")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
-                }
-            }
-            
-            // 4. Last Reflection Info
-            HStack(spacing: 8) {
-                if displayStatus.hasAnyReflections {
-                    if let formattedDate = displayStatus.formattedLastReflectionDate {
-                        Text("Last log: \(formattedDate)")
-                            .font(.caption)
-                    }
-                    if let moodEmoji = displayStatus.lastReflectionMoodEmoji {
-                        Text(moodEmoji)
-                    }
-                } else {
-                    Text("No logs yet")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            // 5. Action Row
-            HStack {
-                Button(action: {
-                    onTap()
-                }) {
-                    Text(displayStatus.isLoggedToday ? "Logged Today" : "Log Today")
-                        .font(.subheadline)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 8)
-                        .background(displayStatus.isLoggedToday ? Color.gray.opacity(0.2) : Color.blue)
-                        .foregroundColor(displayStatus.isLoggedToday ? .gray : .white)
-                        .cornerRadius(20)
-                        .shadow(radius: displayStatus.isLoggedToday ? 0 : 2)
-                }
-                .disabled(displayStatus.isLoggedToday)
+        SectionCard(style: .elevated, padding: .all(AppSpacing.lg)) {
+            VStack(spacing: AppSpacing.md) {
+                // 1. Header Section
+                headerSection
                 
-                Spacer()
-                Button(action: {
+                // 2. Visual Section (Image/Gradient) - More compact
+                visualSection
+                
+                // 3. Progress & Actions Combined Section
+                bottomSection
+            }
+        }
+        .contentShape(Rectangle())
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isPressed)
+        .onTapGesture {
+            if !isEditMode {
+                isPressed = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    isPressed = false
                     onTap()
-                }) {
-                    Text("See All Reflections")
-                        .font(.caption)
-                        .foregroundColor(.blue)
                 }
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(18)
-        .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // Only handle tap when not in edit mode to avoid interfering with drag
-            if !isEditMode {
-                onTap()
-            }
+        .cardShadow()
+        .contextMenu {
+            contextMenuItems
         }
-        // Add sheets and alerts
         .sheet(isPresented: $showingEditSheet) {
             EditIntentionView(goal: goal, dataStore: dataStore)
         }
@@ -374,8 +274,191 @@ struct IntentionCardView: View {
         }
     }
     
-    // MARK: - Cached display data eliminates redundant computations
-    // All display values are now pre-computed and cached in displayStatus
+    private var headerSection: some View {
+        HStack(spacing: AppSpacing.md) {
+            // Emoji
+            Text(goal.selectedOptions.first?.emoji ?? "🎯")
+                .font(.system(size: 36))
+            
+            // Title and reminder info
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text(goal.intention)
+                    .font(AppFonts.titleSmall)
+                    .foregroundColor(AppColors.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                HStack(spacing: AppSpacing.sm) {
+                    // Status indicator
+                    HStack(spacing: AppSpacing.xs) {
+                        Image(systemName: displayStatus.isLoggedToday ? "checkmark.circle.fill" : "clock.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(displayStatus.isLoggedToday ? AppColors.success : AppColors.textTertiary)
+                        
+                        Text(displayStatus.isLoggedToday ? "Logged today" : "Not logged")
+                            .font(AppFonts.captionLarge)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                    
+                    if let reminderTime = goal.reminderTime {
+                        HStack(spacing: AppSpacing.xs) {
+                            Image(systemName: "bell.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppColors.primary)
+                            
+                            Text(reminderTime.formatted(date: .omitted, time: .shortened))
+                                .font(AppFonts.captionLarge)
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            // More Menu
+            Menu {
+                contextMenuItems
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: AppSpacing.iconMedium))
+                    .foregroundColor(AppColors.textSecondary)
+                    .padding(AppSpacing.sm)
+                    .background(
+                        Circle()
+                            .fill(AppColors.surfaceBackground)
+                    )
+            }
+        }
+    }
+    
+    private var visualSection: some View {
+        ZStack {
+            // Background gradient
+            RoundedRectangle(cornerRadius: AppSpacing.cornerRadiusMedium)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            AppColors.primary.opacity(0.12),
+                            AppColors.primary.opacity(0.20)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(height: 100)
+            
+            // Image overlay
+            if let uiImage = dataStore.getCachedImage(named: goal.imageName) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 100)
+                    .clipped()
+                    .cornerRadius(AppSpacing.cornerRadiusMedium)
+                    .opacity(0.85)
+            } else {
+                VStack(spacing: AppSpacing.xs) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 24, weight: .light))
+                        .foregroundColor(AppColors.primary.opacity(0.7))
+                    
+                    Text("Visual Goal")
+                        .font(AppFonts.captionMedium)
+                        .foregroundColor(AppColors.primary.opacity(0.8))
+                }
+            }
+        }
+    }
+    
+    private var bottomSection: some View {
+        VStack(spacing: AppSpacing.md) {
+            // Progress and streak row
+            HStack(spacing: AppSpacing.lg) {
+                // Progress info
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    HStack {
+                        Text("Progress")
+                            .font(AppFonts.labelMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                        
+                        Spacer()
+                        
+                        Text(displayStatus.progressPercentage)
+                            .font(AppFonts.labelMedium)
+                            .foregroundColor(AppColors.primary)
+                            .fontWeight(.semibold)
+                    }
+                    
+                    ProgressView(value: displayStatus.progressValue)
+                        .tint(AppColors.progressGreen)
+                        .background(AppColors.surfaceBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                }
+                
+                // Streak indicator (compact)
+                if goal.streakCount > 0 {
+                    HStack(spacing: AppSpacing.xs) {
+                        Text("🔥")
+                            .font(.system(size: 20))
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(goal.streakCount)")
+                                .font(AppFonts.labelMedium)
+                                .foregroundColor(AppColors.streakOrange)
+                                .fontWeight(.semibold)
+                            
+                            Text("streak")
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(AppColors.textTertiary)
+                        }
+                    }
+                    .padding(.horizontal, AppSpacing.sm)
+                    .padding(.vertical, AppSpacing.xs)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppSpacing.cornerRadiusSmall)
+                            .fill(AppColors.streakOrange.opacity(0.1))
+                    )
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        Button(action: { showingEditSheet = true }) {
+            Label("Edit Intention", systemImage: "pencil")
+        }
+        
+        Button(action: { showingReminderSheet = true }) {
+            Label("Add/Edit Reminder", systemImage: "bell")
+        }
+        
+        Divider()
+        
+        Button(action: { showingInsightsSheet = true }) {
+            Label("View Insights", systemImage: "chart.bar")
+        }
+        
+        Button(action: { showingArchiveAlert = true }) {
+            Label("Archive Intention", systemImage: "archivebox")
+        }
+        
+        Button(action: { showingDuplicateAlert = true }) {
+            Label("Duplicate Intention", systemImage: "plus.square.on.square")
+        }
+        
+        Divider()
+        
+        Button(action: {
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.warning)
+            showingDeleteAlert = true
+        }) {
+            Label("Delete Intention", systemImage: "trash")
+                .foregroundColor(.red)
+        }
+    }
 }
 
 struct EditIntentionView: View {

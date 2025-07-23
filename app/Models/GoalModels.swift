@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - Core Models
-struct Goal: Identifiable, Codable {
+struct Goal: Identifiable, Codable, Equatable {
     let id: UUID
     var intention: String
     var selectedOptions: Set<GoalOption>
