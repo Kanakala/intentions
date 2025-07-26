@@ -11,7 +11,7 @@ struct MainView: View {
     @StateObject private var dataStore = DataStore()
     
     var body: some View {
-        IntentionsListView(dataStore: dataStore)
+        MainTabView(dataStore: dataStore)
             .environmentObject(dataStore)
     }
 }

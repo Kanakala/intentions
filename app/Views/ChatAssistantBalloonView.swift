@@ -4,6 +4,8 @@ struct ChatAssistantBalloonView: View {
     @Binding var isVisible: Bool
     @ObservedObject var draftViewModel: IntentionDraftViewModel
     @State private var messageText = ""
+    @GestureState private var dragOffset: CGFloat = 0
+    @State private var hasDismissed = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -25,17 +27,40 @@ struct ChatAssistantBalloonView: View {
                 .background(Color(.systemBackground))
                 .cornerRadius(20, corners: [.topLeft, .topRight])
                 .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: -2)
+                .offset(y: dragOffset)
+                .gesture(
+                    DragGesture(minimumDistance: 10, coordinateSpace: .local)
+                        .updating($dragOffset) { value, state, _ in
+                            if value.translation.height > 0 {
+                                state = value.translation.height
+                            }
+                        }
+                        .onEnded { value in
+                            if value.translation.height > 80 && isVisible && !hasDismissed {
+                                hasDismissed = true
+                                print("[ChatBalloon] Drag gesture triggered close")
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isVisible = false
+                                }
+                            }
+                        }
+                )
             }
         }
         .background(
             Color.black.opacity(0.3)
                 .ignoresSafeArea()
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isVisible = false
+                    if !hasDismissed {
+                        hasDismissed = true
+                        print("[ChatBalloon] Background tap triggered close")
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isVisible = false
+                        }
                     }
                 }
         )
+        .onAppear { hasDismissed = false }
     }
     
     private var handleBar: some View {
@@ -61,8 +86,11 @@ struct ChatAssistantBalloonView: View {
                 Spacer()
                 
                 Button(action: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isVisible = false
+                    if !hasDismissed {
+                        hasDismissed = true
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isVisible = false
+                        }
                     }
                 }) {
                     Image(systemName: "xmark.circle.fill")
@@ -93,7 +121,7 @@ struct ChatAssistantBalloonView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
-            .onChange(of: draftViewModel.chatMessages.count) { _, _ in
+            .onChange(of: draftViewModel.chatMessages.count) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak draftViewModel] in
                     guard let draftViewModel = draftViewModel else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
@@ -103,7 +131,7 @@ struct ChatAssistantBalloonView: View {
                     }
                 }
             }
-            .onChange(of: draftViewModel.isProcessingMessage) { _, _ in
+            .onChange(of: draftViewModel.isProcessingMessage) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak draftViewModel] in
                     guard let draftViewModel = draftViewModel else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {

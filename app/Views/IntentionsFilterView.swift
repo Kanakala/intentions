@@ -5,18 +5,21 @@ struct IntentionsFilterView: View {
     @Binding var filterState: IntentionsFilterState
     let goalCount: Int
     let filteredCount: Int
+    var isSearchFocused: FocusState<Bool>.Binding
     
     var body: some View {
         VStack(spacing: 0) {
-            // Search Bar
-            searchSection
-            
+            // Only show searchSection when filter panel is not open
+            if !filterState.showFilterPanel {
+                searchSection
+            }
             // Filter Panel (collapsible)
             if filterState.showFilterPanel {
                 filterPanel
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: filterState.showFilterPanel)
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
@@ -32,6 +35,7 @@ struct IntentionsFilterView: View {
                         .foregroundColor(.secondary)
                     TextField("Search intentions...", text: $filterState.searchText)
                         .textFieldStyle(PlainTextFieldStyle())
+                        .focused(isSearchFocused)
                     
                     if !filterState.searchText.isEmpty {
                         Button(action: {
@@ -98,6 +102,9 @@ struct IntentionsFilterView: View {
                             let generator = UIImpactFeedbackGenerator(style: .medium)
                             generator.impactOccurred()
                             filterState.sortOption = sortOption
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                filterState.showFilterPanel = false
+                            }
                         }) {
                             HStack {
                                 Image(systemName: sortOption.systemImage)
@@ -132,6 +139,9 @@ struct IntentionsFilterView: View {
                             let generator = UIImpactFeedbackGenerator(style: .medium)
                             generator.impactOccurred()
                             filterState.filterOption = filterOption
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                filterState.showFilterPanel = false
+                            }
                         }) {
                             HStack {
                                 Image(systemName: filterOption.systemImage)
@@ -243,12 +253,14 @@ struct CompactIntentionsFilterView: View {
 
 #Preview("Full Filter View") {
     @Previewable @State var filterState = IntentionsFilterState()
+    @Previewable @FocusState var isSearchFocused: Bool
     
     return ScrollView {
         IntentionsFilterView(
             filterState: $filterState,
             goalCount: 10,
-            filteredCount: 7
+            filteredCount: 7,
+            isSearchFocused: $isSearchFocused
         )
         .padding()
     }

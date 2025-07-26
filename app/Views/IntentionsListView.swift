@@ -5,10 +5,15 @@ import UIKit
 /// Uses SectionCard, PrimaryButton, and design tokens for consistent styling
 struct IntentionsListView: View {
     @ObservedObject var dataStore: DataStore
+    @Binding var isChatVisible: Bool
+    var isSearchFocused: FocusState<Bool>.Binding
     @State private var showingAddIntention = false
     @State private var selectedGoal: Goal?
     @State private var filterState = IntentionsFilterState()
     @Environment(\.editMode) private var editMode
+    @State private var showingDrawer = false
+    
+    @StateObject private var globalChatViewModel = IntentionDraftViewModel()
     
     // Computed property for filtered goals
     private var displayedGoals: [Goal] {
@@ -28,7 +33,8 @@ struct IntentionsListView: View {
                         IntentionsFilterView(
                             filterState: $filterState,
                             goalCount: dataStore.goals.filter { !$0.isArchived }.count,
-                            filteredCount: displayedGoals.count
+                            filteredCount: displayedGoals.count,
+                            isSearchFocused: isSearchFocused
                         )
                     }
                     .padding(.horizontal, AppSpacing.lg)
@@ -62,32 +68,45 @@ struct IntentionsListView: View {
                             }
                         }
                         
-                        // Modern Floating Action Button
-                        VStack {
-                            Spacer()
-                            HStack {
+                        // Modern Floating Action Button (now AI Chat Balloon)
+                        if !isSearchFocused.wrappedValue {
+                            VStack {
                                 Spacer()
-                                PrimaryButton(
-                                    title: "Add Intention",
-                                    action: {
+                                HStack {
+                                    Spacer()
+                                    Button(action: {
                                         let generator = UIImpactFeedbackGenerator(style: .medium)
                                         generator.impactOccurred()
-                                        showingAddIntention = true
-                                    },
-                                    style: .primary,
-                                    size: .medium,
-                                    icon: "plus"
-                                )
-                                .floatingShadow()
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                            isChatVisible = true
+                                        }
+                                    }) {
+                                        Image(systemName: "message.fill")
+                                            .font(.system(size: 28, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .frame(width: 56, height: 56)
+                                            .background(AppColors.primary)
+                                            .clipShape(Circle())
+                                            .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
+                                    }
+                                }
+                                .padding(AppSpacing.lg)
                             }
-                            .padding(AppSpacing.lg)
                         }
                     }
                 }
+                .animation(.easeInOut(duration: 0.3), value: filterState.showFilterPanel)
             }
             .navigationTitle("Your Intentions")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        showingDrawer = true
+                    }) {
+                        Image(systemName: "line.3.horizontal")
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Edit") {
                         withAnimation(.easeInOut(duration: AppSpacing.animationMedium)) {
@@ -105,6 +124,9 @@ struct IntentionsListView: View {
             }
             .sheet(isPresented: $showingAddIntention) {
                 CreateIntentionScreen(dataStore: dataStore)
+            }
+            .sheet(isPresented: $showingDrawer) {
+                DrawerView()
             }
             .navigationDestination(isPresented: Binding(
                 get: { selectedGoal != nil },
